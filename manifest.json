@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "LeetCode Accepted Submission Extractor",
+  "version": "1.0",
+  "description": "Extract code, title, difficulty, examples, and runtime when a LeetCode submission is accepted.",
+  "permissions": ["scripting", "activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon.png",
+    "48": "icons8-chrome-48.png",
+    "128": "icons8-chrome-144.png"
+  }
+}
