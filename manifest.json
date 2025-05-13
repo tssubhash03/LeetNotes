@@ -1,19 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "LeetCode Accepted Submission Extractor",
+  "name": "LeetCode Problem Extractor",
   "version": "1.0",
-  "description": "Extract code, title, difficulty, examples, and runtime when a LeetCode submission is accepted.",
-  "permissions": ["scripting", "activeTab"],
+  "permissions": ["scripting", "tabs", "storage","runtime"],
+  "host_permissions": ["https://leetcode.com/*"],
   "content_scripts": [
     {
       "matches": ["https://leetcode.com/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "js": ["content.js"]
     }
   ],
   "icons": {
-    "16": "icon.png",
-    "48": "icons8-chrome-48.png",
-    "128": "icons8-chrome-144.png"
+    "48": "icon.png"
   }
 }

@@ -1,28 +1,49 @@
-// ✅ Wait until the submission result shows "Accepted"
+// ✅ Show success/failure popup
+function showPopup(message, color = "green") {
+  const popup = document.createElement("div");
+  popup.textContent = message;
+  popup.style.cssText = `
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: ${color};
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    z-index: 9999;
+    font-size: 14px;
+  `;
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 3000);
+
+  // Message to extension popup (optional)
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "EXTRACTION_SUCCESS") {
+    console.log("Extraction was successful!");
+    // You can do other actions here, like updating the popup or sending a response.
+  }
+});
+
+}
+
+let alreadyExtracted = false;
+
 function waitForAcceptedSubmission(callback) {
   const observer = new MutationObserver(() => {
     const acceptedElement = document.querySelector('span[data-e2e-locator="submission-result"]');
-    const isAccepted = acceptedElement && acceptedElement.innerText === "Accepted";
+    const isAccepted = acceptedElement && acceptedElement.innerText.trim() === "Accepted";
 
-    if (isAccepted) {
+    if (isAccepted && !alreadyExtracted) {
+      alreadyExtracted = true;
       observer.disconnect();
-      callback();
+      console.log("✅ Submission accepted");
+      setTimeout(callback, 1000);
     }
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// ✅ Extract code from editor
-function extractCode() {
-  const codeElement = document.querySelector("div.view-lines");
-  if (!codeElement) return "Code not found.";
-  return Array.from(codeElement.querySelectorAll("div.view-line"))
-    .map((line) => line.innerText)
-    .join("\n");
-}
-
-// ✅ Extract title and problem number
 function extractTitleAndNumber() {
   const titleElement = document.querySelector('div.text-title-large a[href^="/problems/"]');
   const fullTitle = titleElement?.innerText || "Not found";
@@ -38,27 +59,28 @@ function extractTitleAndNumber() {
   return { fullTitle, problemNumber, problemName };
 }
 
-// ✅ Extract difficulty
-function extractDifficulty() {
-  const difficultyElement = document.querySelector('div.text-difficulty-easy, div.text-difficulty-medium, div.text-difficulty-hard');
-  return difficultyElement?.innerText || "Unknown";
+function extractCode() {
+  const codeElement = document.querySelector("div.view-lines");
+  if (!codeElement) return "Code not found.";
+  return Array.from(codeElement.querySelectorAll("div.view-line"))
+    .map((line) => line.innerText)
+    .join("\n");
 }
 
-// ✅ Extract topics
+function extractDifficulty() {
+  const el = document.querySelector('div.text-difficulty-easy, div.text-difficulty-medium, div.text-difficulty-hard');
+  return el?.innerText || "Unknown";
+}
+
 function extractTopics() {
   return Array.from(document.querySelectorAll('a[href^="/tag/"]')).map(el => el.innerText.trim());
 }
 
-// ✅ Extract constraints like time and space complexity
 function extractConstraints() {
-  const rawConstraints = Array.from(document.querySelectorAll("li code")).map(el => el.innerText.trim());
-  const filtered = rawConstraints.filter(line =>
-    /(time|space)\s*complexity/i.test(line) || /O\([^)]*\)/.test(line)
-  );
-  return filtered;
+  const raw = Array.from(document.querySelectorAll("li code")).map(el => el.innerText.trim());
+  return raw.filter(line => /(time|space)\s*complexity/i.test(line) || /O\([^)]*\)/.test(line));
 }
 
-// ✅ Extract examples from the description
 function extractExamples() {
   const examples = [];
   const preTags = Array.from(document.querySelectorAll("pre"));
@@ -82,13 +104,11 @@ function extractExamples() {
   return examples;
 }
 
-// ✅ Extract runtime, memory, and performance percentages
 function extractRuntimes() {
-  const runtimeElements = document.querySelectorAll('.text-sd-foreground.text-lg.font-semibold');
-  return Array.from(runtimeElements).map(element => element.innerText.trim());
+  const elements = document.querySelectorAll('.text-sd-foreground.text-lg.font-semibold');
+  return Array.from(elements).map(el => el.innerText.trim());
 }
 
-// ✅ Combine all extractions
 function extractProblemInfo() {
   const { fullTitle, problemNumber, problemName } = extractTitleAndNumber();
   const submittedCode = extractCode();
@@ -111,14 +131,96 @@ function extractProblemInfo() {
   };
 }
 
-// ✅ Wait and run on Accepted submissions
-console.log("🚀 LeetCode Extractor Loaded");
-waitForAcceptedSubmission(() => {
-  const data = extractProblemInfo();
-  console.log("✅ Accepted Submission Extracted:", data);
+/* ---------------------------
+   Gemini API Integration 
+--------------------------- */
+const GEMINI_API_KEY = "AIzaSyChLXi0X7iNgEMaXA2QvTnnFl3O5JV09xM"; // Replace with your actual API key
 
-  // ✅ Store in localStorage (optional)
-  localStorage.setItem("lastAcceptedSubmission", JSON.stringify(data));
+// This function sends the extracted code and problem title to Gemini AI, and logs a formatted explanation.
+async function getFormattedGeminiExplanation(code, problemTitle = "Unknown Problem") {
+  const prompt = `
+Problem: ${problemTitle}
 
-  // You could also send to Google Sheets or backend here
-});
+Solution Approach: Brute Force
+
+Logic Explanation based on code language (C++):
+${code}
+
+Now give the response in the following format:
+
+Problem: [Problem Name and Number]
+Solution Approach: [Brute Force/Optimized]
+Logic Explanation based on code language:
+[Your explanation here]
+
+Complexity Analysis:
+
+Time Complexity: O([complexity])
+[Brief explanation of why this is the time complexity]
+
+Space Complexity: O([complexity])
+[Brief explanation of memory usage]
+[Note any additional data structures created]
+`;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4 }
+        })
+      }
+    );
+
+    const data = await response.json();
+console.log("🔍 Raw Gemini Response:", data);
+
+    const aiReply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (aiReply) {
+      console.log("📘 Gemini AI Explanation:\n\n", aiReply);
+    } else {
+      console.error("❌ No valid response from Gemini:", data);
+    }
+  } catch (error) {
+    console.error("❌ API Error:", error);
+  }
+}
+
+/* ---------------------------
+   Extraction & Integration 
+--------------------------- */
+// Modify runExtractor to include a call to getFormattedGeminiExplanation
+function runExtractor() {
+  waitForAcceptedSubmission(() => {
+    const data = extractProblemInfo();
+    console.log("✅ Accepted Submission Extracted:", data);
+    
+    localStorage.setItem("lastAcceptedSubmission", JSON.stringify(data));
+    showPopup("✅ Problem data extracted successfully!", "green");
+    alert("✅ Problem data extracted successfully!");
+
+    // Call the Gemini AI formatted explanation function.
+    // This sends the extracted code and full problem title.
+    getFormattedGeminiExplanation(data.submittedCode, data.fullTitle);
+  });
+}
+
+// Listen to SPA route change (React navigation)
+let lastUrl = location.href;
+new MutationObserver(() => {
+  const currentUrl = location.href;
+  if (currentUrl !== lastUrl) {
+    lastUrl = currentUrl;
+    alreadyExtracted = false; // Reset on URL change
+    console.log("🔁 Detected URL change:", currentUrl);
+    setTimeout(runExtractor, 1000); // Delay to ensure DOM mounts
+  }
+}).observe(document, { subtree: true, childList: true });
+
+// Initial run
+setTimeout(runExtractor, 1000);
