@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LeetCode Problem Extractor",
   "version": "1.0",
-  "permissions": ["scripting", "tabs", "storage","runtime"],
+  "permissions": ["scripting", "tabs", "storage"],
   "host_permissions": ["https://leetcode.com/*"],
   "content_scripts": [
     {
