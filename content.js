@@ -16,14 +16,12 @@ function showPopup(message, color = "green") {
   document.body.appendChild(popup);
   setTimeout(() => popup.remove(), 3000);
 
-  // Message to extension popup (optional)
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "EXTRACTION_SUCCESS") {
-    console.log("Extraction was successful!");
-    // You can do other actions here, like updating the popup or sending a response.
-  }
-});
-
+  // ✅ Listen for messages
+  browser.runtime.onMessage.addListener((message, sender) => {
+    if (message.type === "EXTRACTION_SUCCESS") {
+      console.log("Extraction was successful!");
+    }
+  });
 }
 
 let alreadyExtracted = false;
@@ -136,7 +134,6 @@ function extractProblemInfo() {
 --------------------------- */
 const GEMINI_API_KEY = "AIzaSyChLXi0X7iNgEMaXA2QvTnnFl3O5JV09xM"; // Replace with your actual API key
 
-// This function sends the extracted code and problem title to Gemini AI, and logs a formatted explanation.
 async function getFormattedGeminiExplanation(code, problemTitle = "Unknown Problem") {
   const prompt = `
 Problem: ${problemTitle}
@@ -177,7 +174,7 @@ Space Complexity: O([complexity])
     );
 
     const data = await response.json();
-console.log("🔍 Raw Gemini Response:", data);
+    console.log("🔍 Raw Gemini Response:", data);
 
     const aiReply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
@@ -194,7 +191,6 @@ console.log("🔍 Raw Gemini Response:", data);
 /* ---------------------------
    Extraction & Integration 
 --------------------------- */
-// Modify runExtractor to include a call to getFormattedGeminiExplanation
 function runExtractor() {
   waitForAcceptedSubmission(() => {
     const data = extractProblemInfo();
@@ -204,23 +200,19 @@ function runExtractor() {
     showPopup("✅ Problem data extracted successfully!", "green");
     alert("✅ Problem data extracted successfully!");
 
-    // Call the Gemini AI formatted explanation function.
-    // This sends the extracted code and full problem title.
     getFormattedGeminiExplanation(data.submittedCode, data.fullTitle);
   });
 }
 
-// Listen to SPA route change (React navigation)
 let lastUrl = location.href;
 new MutationObserver(() => {
   const currentUrl = location.href;
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
-    alreadyExtracted = false; // Reset on URL change
+    alreadyExtracted = false;
     console.log("🔁 Detected URL change:", currentUrl);
-    setTimeout(runExtractor, 1000); // Delay to ensure DOM mounts
+    setTimeout(runExtractor, 1000);
   }
 }).observe(document, { subtree: true, childList: true });
 
-// Initial run
 setTimeout(runExtractor, 1000);
